@@ -1,0 +1,8 @@
+[project]
+name = "cnn"
+version = "0.1.0"
+requires-python = ">=3.10, <=3.13"
+dependencies = [
+    "flask>=3.1.2",
+    "tensorflow>=2.20.0",
+]
