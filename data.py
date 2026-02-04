@@ -1,34 +1,24 @@
+import jax.numpy as jnp
 import numpy as np
 import gzip
-import os
 import random
 
-'''def _open_file(filename):
+def _open_file(filename):
     if filename.endswith(".gz"):
         return gzip.open(filename, "rb")
     return open(filename, "rb")
 
-def load_mnist_images(filename):
-    with _open_file(filename) as f:
-        data = f.read()
-    images = np.frombuffer(data, dtype=np.uint8, offset=16)
-    return images.reshape(-1, 28, 28)
-
-def load_mnist_labels(filename):
-    with _open_file(filename) as f:
-        data = f.read()
-    labels = np.frombuffer(data, dtype=np.uint8, offset=8)
-    return labels'''
-
 def default_collate(batch):
     """
     batch = [(x1, y1), (x2, y2), ..., (xB, yB)]
+    Returns:
+        X: [B, ...] jnp.ndarray
+        Y: [B] jnp.ndarray
     """
-    xs, ys = zip(*batch)          # unzip
-    X = torch.stack(xs)           # [B, ...]
-    Y = torch.tensor(ys)          # [B]
+    xs, ys = zip(*batch)
+    X = jnp.stack(xs)
+    Y = jnp.array(ys)
     return X, Y
-
 
 class LazyMNISTDataset:
 
@@ -39,7 +29,7 @@ class LazyMNISTDataset:
         self.add_channel = add_channel
         self.flatten = flatten
 
-        # Load only labels into memory (small)
+        # Load only labels into memory
         with _open_file(labels_file) as f:
             data = f.read()
         self.labels = np.frombuffer(data, dtype=np.uint8, offset=8).astype(np.int64)
@@ -68,37 +58,34 @@ class LazyMNISTDataset:
             image = image.reshape(-1)  # (784,)
 
         label = self.labels[idx]
-        return torch.tensor(image), torch.tensor(label)
-
+        return jnp.array(image), jnp.array(label)
 
 class MNISTDataLoader:
 
-    def __init__(self, dataset, batch_size=32, shuffle=True, collate_fn=None, drop_last=None):
+    def __init__(self, dataset, batch_size=32, shuffle=True, collate_fn=None, drop_last=False):
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.collate_fn = collate_fn or default_collate
-        self.drop_last = drop_last or False
+        self.drop_last = drop_last
 
     def __iter__(self):
         # 1. Create indices
         indices = list(range(len(self.dataset)))
 
-        # 2. Shuffle indices if needed
+        # 2. Shuffle if needed
         if self.shuffle:
             random.shuffle(indices)
 
         # 3. Accumulate samples into batches
         batch = []
         for idx in indices:
-            sample = self.dataset[idx]
-            batch.append(sample)
-
+            batch.append(self.dataset[idx])
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
                 batch = []
 
-        # 4. Yield last batch (if any)
+        # 4. Yield last batch if not dropping
         if len(batch) > 0 and not self.drop_last:
             yield self.collate_fn(batch)
 
@@ -107,4 +94,3 @@ class MNISTDataLoader:
         if not self.drop_last and len(self.dataset) % self.batch_size != 0:
             n += 1
         return n
-
